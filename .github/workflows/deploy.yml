@@ -21,7 +21,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           source: "."
-          target: "/root/hanzi-app"
+          target: "/home/ndavs/web/kitAs"
 
       # 2. Подключаемся к серверу и перезапускаем Docker
       - name: Execute Docker Compose
