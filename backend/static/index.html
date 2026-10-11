@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тренажер иероглифов</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root {
+            --primary: #e63946;
+            --bg: #f7f9fc;
+            --surface: #ffffff;
+            --text: #2b2d42;
+            --text-muted: #8d99ae;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+        body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+        
+        #app { display: flex; height: 100vh; flex-direction: row; }
+        
+        /* Десктопная шапка скрыта */
+        .mobile-header { display: none; }
+        .overlay { display: none; }
+        
+        /* Сайдбар (Десктоп) */
+        .sidebar { width: 300px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; }
+        .word-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .word-item { padding: 15px; border-radius: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; margin-bottom: 5px; }
+        .word-item:hover { background: var(--bg); }
+        .word-item.active { background: #fff0f1; color: var(--primary); font-weight: bold; }
+        
+        /* Рабочая область */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; align-items: center; padding: 30px; }
+        .card { background: var(--surface); border-radius: 20px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 600px; text-align: center; border: 1px solid var(--border); margin-bottom: 20px; }
+        
+        .header h1 { font-size: 3.5rem; margin-bottom: 5px; }
+        .header p { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 20px; }
+        
+        /* НОВЫЙ БЛОК: Картинка и подсказка */
+        .media-box { 
+            margin-bottom: 20px; 
+            border-radius: 16px; 
+            overflow: hidden; 
+            border: 1px solid var(--border); 
+            background: #fff; 
+        }
+
+        .media-box img { 
+            width: 100%; 
+            height: 180px; 
+            object-fit: contain; /* <-- Главное изменение здесь */
+            display: block; 
+            background-color: #f7f9fc; /* Можно добавить легкий фон, если картинка не займет всю ширину */
+        }
+
+        .media-box .hint { 
+            padding: 12px; 
+            font-size: 0.95rem; 
+            background: #f8fafc; 
+            color: var(--text-muted); 
+            border-top: 1px solid var(--border); 
+        }
+        /* Карусель гифок */
+        .carousel { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; }
+        .gif-box { width: 100px; height: 100px; border: 1px solid var(--border); border-radius: 12px; padding: 5px; background: #fff; display: flex; align-items: center; justify-content: center; }
+        .gif-box img { width: 100%; height: 100%; object-fit: contain; }
+        .gif-placeholder { font-size: 3.5rem; color: #cbd5e1; font-weight: 300; animation: pulse 1.5s infinite ease-in-out; }
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        
+        .carousel-btn { background: var(--bg); border: none; padding: 10px; border-radius: 50%; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+        
+        /* Резиновый адаптивный холст */
+        .canvas-wrapper { 
+            position: relative; 
+            width: 100%;
+            max-width: 560px;
+            margin: 0 auto 20px auto; 
+            border-radius: 12px; 
+            border: 2px solid var(--border); 
+            background: #fff; 
+            overflow: hidden;
+        }
+        
+        .canvas-wrapper::before {
+            content: ''; position: absolute; inset: 0; opacity: 0.4; pointer-events: none; z-index: 1;
+            background-image: 
+                linear-gradient(to right, transparent 49.5%, var(--border) 49.5%, var(--border) 50.5%, transparent 50.5%),
+                linear-gradient(to bottom, transparent 49.5%, var(--border) 49.5%, var(--border) 50.5%, transparent 50.5%);
+            background-size: calc(100% / var(--char-count)) 100%;
+        }
+        
+        canvas { 
+            display: block; width: 100%; height: auto; 
+            touch-action: none; position: relative; z-index: 2; 
+        }
+        
+        .buttons { display: flex; gap: 10px; }
+        button.action-btn { flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; }
+        .btn-clear { background: #f1f5f9; color: var(--text-muted); }
+        .btn-check { background: var(--primary); color: white; }
+
+        /* Мобильная адаптация */
+        @media (max-width: 768px) {
+            #app { flex-direction: column; }
+            
+            .mobile-header { 
+                display: flex; align-items: center; padding: 15px 20px; 
+                background: var(--surface); border-bottom: 1px solid var(--border); 
+                position: sticky; top: 0; z-index: 50; 
+            }
+            .burger-btn { background: none; border: none; font-size: 1.8rem; margin-right: 15px; cursor: pointer; }
+            .mobile-title { font-size: 1.2rem; font-weight: bold; }
+            
+            .sidebar {
+                position: fixed; top: 0; left: -320px; width: 280px !important; height: 100vh; 
+                transition: left 0.3s ease; box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+            }
+            .sidebar.open { left: 0; }
+            
+            .overlay.active { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; }
+            
+            .main-content { padding: 15px; height: calc(100vh - 65px); }
+            .card { padding: 15px; border-radius: 16px; margin-bottom: 0; }
+            .header h1 { font-size: 2.8rem; }
+            .header p { margin-bottom: 15px; }
+            .media-box img { height: 120px; } /* Картинка меньше на мобильном */
+            .carousel { margin-bottom: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Мобильная шапка -->
+        <div class="mobile-header">
+            <button class="burger-btn" @click="isMenuOpen = true">☰</button>
+            <span class="mobile-title">Словарь</span>
+        </div>
+
+        <!-- Темный фон для мобильного меню -->
+        <div class="overlay" :class="{ 'active': isMenuOpen }" @click="isMenuOpen = false"></div>
+
+        <!-- Боковая панель -->
+        <aside class="sidebar" :class="{ 'open': isMenuOpen }">
+            <div style="padding: 20px; border-bottom: 1px solid var(--border); font-weight: bold; font-size: 1.2rem;">
+                Список слов
+            </div>
+            <div class="word-list">
+                <div v-for="word in words" :key="word.id" 
+                     class="word-item" :class="{ active: currentWord?.id === word.id }"
+                     @click="selectWord(word)">
+                    <span>{{ word.meaning }}</span>
+                    <strong>{{ word.hanzi }}</strong>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Рабочая область -->
+        <main class="main-content" v-if="currentWord">
+            <div class="card">
+                <div class="header">
+                    <h1>{{ currentWord.hanzi }}</h1>
+                    <p>{{ currentWord.pinyin }}</p>
+                    <button class="action-btn" style="background:#e2e8f0; width: 100%; max-width: 250px;" @click="playAudio(currentWord.audio_url)">🔊 Произнести</button>
+                </div>
+
+                <!-- ДОБАВЛЕН БЛОК КАРТИНКИ И ПОДСКАЗКИ -->
+                <div class="media-box" v-if="currentWord.image_url">
+                    <img :src="currentWord.image_url" :alt="currentWord.meaning">
+                    <div class="hint" v-if="currentWord.context_hint">
+                        {{ currentWord.context_hint }}
+                    </div>
+                </div>
+
+                <div class="carousel" v-if="currentWord.gifs && currentWord.gifs.length > 0">
+                    <button class="carousel-btn" @click="prevGif" :disabled="currentWord.gifs.length === 1">◀</button>
+                    <div class="gif-box">
+                        <div class="gif-placeholder" v-show="!loadedGifs[currentGifIndex]">
+                            {{ currentWord.hanzi[currentGifIndex] }}
+                        </div>
+                        <img v-for="(gif, index) in currentWord.gifs" 
+                             :key="gif" :src="gif" @load="onGifLoad(index)"
+                             v-show="index === currentGifIndex && loadedGifs[index]" alt="Порядок черт">
+                    </div>
+                    <button class="carousel-btn" @click="nextGif" :disabled="currentWord.gifs.length === 1">▶</button>
+                </div>
+
+                <!-- Резиновый холст -->
+                <div class="canvas-wrapper" :style="{ '--char-count': currentWord.hanzi.length }">
+                    <canvas ref="canvasEl" 
+                        :width="currentWord.hanzi.length * 280" 
+                        height="280"
+                        @mousedown="startDrawing" @mousemove="draw" @mouseup="stopDrawing" @mouseleave="stopDrawing"
+                        @touchstart="startDrawing" @touchmove="draw" @touchend="stopDrawing"></canvas>
+                </div>
+
+                <div class="buttons">
+                    <button class="action-btn btn-clear" @click="clearCanvas">Очистить</button>
+                    <button class="action-btn btn-check" @click="checkCanvas">Готово</button>
+                </div>
+                
+                <p style="color: #2a9d8f; font-weight: bold; margin-top: 15px;" v-if="successMsg">{{ successMsg }}</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const words = ref([]);
+                const currentWord = ref(null);
+                const currentGifIndex = ref(0);
+                const loadedGifs = ref([]);
+                const canvasEl = ref(null);
+                const successMsg = ref('');
+                const isMenuOpen = ref(false); 
+                
+                let ctx = null;
+                let isDrawing = false;
+
+                onMounted(async () => {
+                    const res = await fetch('/api/words');
+                    words.value = await res.json();
+                    if (words.value.length > 0) selectWord(words.value[0]);
+                });
+
+                const selectWord = async (word) => {
+                    currentWord.value = word;
+                    currentGifIndex.value = 0;
+                    successMsg.value = '';
+                    isMenuOpen.value = false; 
+                    loadedGifs.value = new Array(word.gifs ? word.gifs.length : 0).fill(false);
+                    
+                    await nextTick();
+                    initCanvas();
+                };
+
+                const onGifLoad = (index) => loadedGifs.value[index] = true;
+                const nextGif = () => { if (currentWord.value.gifs.length > 1) currentGifIndex.value = (currentGifIndex.value + 1) % currentWord.value.gifs.length; };
+                const prevGif = () => { if (currentWord.value.gifs.length > 1) currentGifIndex.value = (currentGifIndex.value - 1 + currentWord.value.gifs.length) % currentWord.value.gifs.length; };
+
+                const initCanvas = () => {
+                    if (!canvasEl.value) return;
+                    ctx = canvasEl.value.getContext('2d');
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.lineWidth = 10;
+                    clearCanvas();
+                };
+
+                const drawTemplate = () => {
+                    ctx.save();
+                    ctx.font = "180px sans-serif";
+                    ctx.fillStyle = "rgba(189, 195, 199, 0.25)";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    
+                    const chars = currentWord.value.hanzi.split('');
+                    chars.forEach((char, index) => {
+                        const centerX = 140 + (index * 280);
+                        ctx.fillText(char, centerX, 145);
+                    });
+                    ctx.restore();
+                };
+
+                const clearCanvas = () => {
+                    ctx.clearRect(0, 0, canvasEl.value.width, canvasEl.value.height);
+                    drawTemplate();
+                    successMsg.value = '';
+                };
+
+                const getPos = (e) => {
+                    const rect = canvasEl.value.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    const scaleX = canvasEl.value.width / rect.width;
+                    const scaleY = canvasEl.value.height / rect.height;
+                    
+                    return { 
+                        x: (clientX - rect.left) * scaleX, 
+                        y: (clientY - rect.top) * scaleY 
+                    };
+                };
+
+                const startDrawing = (e) => {
+                    e.preventDefault();
+                    isDrawing = true;
+                    ctx.strokeStyle = '#2b2d42';
+                    const pos = getPos(e);
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                };
+
+                const draw = (e) => {
+                    if (!isDrawing) return;
+                    e.preventDefault();
+                    const pos = getPos(e);
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                };
+
+                const stopDrawing = () => isDrawing = false;
+
+                const playAudio = (url) => {
+                    if (!url) return;
+                    const audio = new Audio(url);
+                    audio.play().catch(e => console.error("Ошибка:", e));
+                };
+
+                const checkCanvas = () => successMsg.value = "Отлично! Иероглифы засчитаны ✨";
+
+                return {
+                    words, currentWord, currentGifIndex, canvasEl, 
+                    loadedGifs, onGifLoad, isMenuOpen,
+                    selectWord, nextGif, prevGif,
+                    startDrawing, draw, stopDrawing, clearCanvas, 
+                    playAudio, checkCanvas, successMsg
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
