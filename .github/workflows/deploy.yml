@@ -32,4 +32,5 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /home/ndavs/web/kitAs
+            dcoker-compose down -v
             docker-compose up -d --build
