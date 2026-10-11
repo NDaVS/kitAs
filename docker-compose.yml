@@ -18,7 +18,7 @@ services:
   web:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "80:8000"
     environment:
       - DATABASE_URL=postgresql://hanzi_user:hanzi_password@db:5432/hanzi_db
     depends_on:
